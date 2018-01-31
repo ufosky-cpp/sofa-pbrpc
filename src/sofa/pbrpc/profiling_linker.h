@@ -17,7 +17,7 @@ public:
         if (PROFILING_LINKER_FALSE != false)
         {
 #if defined(SOFA_PBRPC_PROFILING)
-            ProfilerStart(NULL);
+//            ProfilerStart(NULL);
             TCMallocGetHeapSample(NULL);
 #endif // SOFA_PBRPC_PROFILING
         }

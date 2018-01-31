@@ -316,6 +316,6 @@ class PERFTOOLS_DLL_DECL MallocExtension {
 };
 
 void TCMallocGetHeapSample(std::string* writer) {
-    MallocExtension::instance()->GetHeapSample(writer);
+//    MallocExtension::instance()->GetHeapSample(writer);
 }
 

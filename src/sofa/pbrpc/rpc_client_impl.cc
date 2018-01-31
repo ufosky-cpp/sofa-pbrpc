@@ -258,6 +258,7 @@ void RpcClientImpl::CallMethod(const google::protobuf::Message* request,
     meta.set_type(RpcMeta::REQUEST);
     meta.set_sequence_id(cntl->SequenceId());
     meta.set_method(cntl->MethodId());
+    meta.mutable_trace_info()->insert("aaa", "bbb");
     int64 timeout = cntl->Timeout();
     if (timeout > 0)
     {

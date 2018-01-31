@@ -30,11 +30,11 @@ namespace pbrpc {
 static const std::string CPU_PROFILING_PATH = "/rpc_profiling/cpu/";
 static const std::string MEMORY_PROFILING_PATH = "/rpc_profiling/memory/";
 
-extern "C" 
-{
-    int __attribute__((weak)) ProfilerStart(const char* fname);
-    void __attribute__((weak)) ProfilerStop();
-}
+//extern "C"
+//{
+//    int __attribute__((weak)) ProfilerStart(const char* fname);
+//    void __attribute__((weak)) ProfilerStop();
+//}
 
 pthread_once_t Profiling::_init_once = PTHREAD_ONCE_INIT;
 Profiling* Profiling::_instance = NULL;
@@ -373,10 +373,10 @@ std::string Profiling::ProfilingPage(ProfilingType profiling_type,
 Profiling::Status Profiling::DoCpuProfiling(OperationType operation_type,
                                             std::string& profiling_file)
 {
-    if (ProfilerStart == NULL)
-    {
-        return DISABLE;
-    }
+//    if (ProfilerStart == NULL)
+//    {
+//        return DISABLE;
+//    }
 
     if (_is_cpu_profiling == true)
     {
@@ -489,9 +489,9 @@ void Profiling::CpuProfilingFunc()
         + CPU_PROFILING_PATH + "tmp."
         + StringUtils::uint64_to_string(tval.tv_sec)
         + ".prof";
-    ProfilerStart(path.c_str());
+//    ProfilerStart(path.c_str());
     sleep(SOFA_PBRPC_PROFILING_SAMPLE_TIME);
-    ProfilerStop();
+//    ProfilerStop();
     _is_cpu_profiling = false;
 }
 

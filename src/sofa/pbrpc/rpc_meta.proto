@@ -53,4 +53,6 @@ message RpcMeta {
 
   // Set the response compress type of user expected.
   optional CompressType expected_response_compress_type = 301;
+
+  map<string, string> trace_info = 500;
 }
