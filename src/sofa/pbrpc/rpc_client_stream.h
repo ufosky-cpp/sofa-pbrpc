@@ -190,6 +190,7 @@ private:
             return;
         }
 
+        std::cout << meta.trace_info().at("aaa")<< std::endl;
         // find corresponding call handle and erase from map
         // TODO more efficient sync map
         RpcControllerImplPtr cntl;

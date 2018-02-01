@@ -54,7 +54,7 @@ void BinaryRpcRequest::ProcessRequest(
                 RPC_ERROR_PARSE_METHOD_NAME, "method full name: " + _req_meta.method());
         return;
     }
-
+    std::cout << _req_meta.trace_info().at("aaa") << std::endl;
     MethodBoard* method_board = FindMethodBoard(service_pool, service_name, method_name);
     if (method_board == NULL)
     {
@@ -134,6 +134,7 @@ ReadBufferPtr BinaryRpcRequest::AssembleSucceedResponse(
     meta.set_sequence_id(cntl->SequenceId());
     meta.set_failed(false);
     meta.set_compress_type(cntl->ResponseCompressType());
+    (*meta.mutable_trace_info())["aaa"] = "ddd";
 
     RpcMessageHeader header;
     int header_size = static_cast<int>(sizeof(header));
