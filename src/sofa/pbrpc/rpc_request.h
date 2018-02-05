@@ -45,7 +45,8 @@ public:
     // Process the request.
     virtual void ProcessRequest(
             const RpcServerStreamWPtr& server_stream,
-            const ServicePoolPtr& service_pool) = 0;
+            const ServicePoolPtr& service_pool,
+            const SpanPtr& span) = 0;
 
     // Assemble succeed response to buffer.
     virtual ReadBufferPtr AssembleSucceedResponse(
@@ -64,13 +65,15 @@ public:
             MethodBoard* method_board,
             RpcController* controller,
             google::protobuf::Message* request,
-            google::protobuf::Message* response);
+            google::protobuf::Message* response,
+            const SpanPtr& span);
 
     void OnCallMethodDone(
             MethodBoard* method_board,
             RpcController* controller,
             google::protobuf::Message* request,
-            google::protobuf::Message* response);
+            google::protobuf::Message* response,
+            const SpanPtr& span);
 
     void SendSucceedResponse(
             const RpcControllerImplPtr& cntl,

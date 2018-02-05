@@ -65,13 +65,13 @@ public:
 private:
     void OnCreated(const RpcServerStreamPtr& stream);
 
-    void OnAccepted(const RpcServerStreamPtr& stream);
+    void OnAccepted(const RpcServerStreamPtr& stream, const SpanPtr &span);
 
-    void OnAcceptFailed(RpcErrorCode error_code, const std::string& error_text);
+    void OnAcceptFailed(RpcErrorCode error_code, const std::string& error_text, const SpanPtr &span);
 
-    void OnReceived(const RpcServerStreamWPtr& stream, const RpcRequestPtr& request);
+    void OnReceived(const RpcServerStreamWPtr& stream, const RpcRequestPtr& request, const SpanPtr& span);
 
-    void OnClosed(const RpcServerStreamPtr& stream);
+    void OnClosed(const RpcServerStreamPtr& stream, const SpanPtr& span);
 
     void StopStreams();
 

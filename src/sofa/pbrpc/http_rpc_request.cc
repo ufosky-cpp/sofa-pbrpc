@@ -56,7 +56,8 @@ uint64 HTTPRpcRequest::SequenceId()
 
 void HTTPRpcRequest::ProcessRequest(
         const RpcServerStreamWPtr& server_stream,
-        const ServicePoolPtr& service_pool)
+        const ServicePoolPtr& service_pool,
+        const SpanPtr& span)
 {
     std::string service_name;
     std::string method_name;
@@ -148,7 +149,7 @@ void HTTPRpcRequest::ProcessRequest(
     cntl->SetHttpQueryParams(&_query_params);
     cntl->SetHttpHeaders(&_headers);
 
-    CallMethod(method_board, controller, request, response);
+    CallMethod(method_board, controller, request, response, span);
 }
 
 ReadBufferPtr HTTPRpcRequest::AssembleSucceedResponse(

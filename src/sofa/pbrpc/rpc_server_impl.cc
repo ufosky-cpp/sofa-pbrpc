@@ -131,9 +131,9 @@ bool RpcServerImpl::Start(const std::string& server_address)
     _listener->set_create_callback(boost::bind(
                 &RpcServerImpl::OnCreated, shared_from_this(), _1));
     _listener->set_accept_callback(boost::bind(
-                &RpcServerImpl::OnAccepted, shared_from_this(), _1));
+                &RpcServerImpl::OnAccepted, shared_from_this(), _1, _2));
     _listener->set_accept_fail_callback(boost::bind(
-                &RpcServerImpl::OnAcceptFailed, shared_from_this(), _1, _2));
+                &RpcServerImpl::OnAcceptFailed, shared_from_this(), _1, _2, _3));
     if (!_listener->start_listen())
     {
 #if defined( LOG )
@@ -357,9 +357,9 @@ bool RpcServerImpl::RestartListen()
     _listener->set_create_callback(boost::bind(
                 &RpcServerImpl::OnCreated, shared_from_this(), _1));
     _listener->set_accept_callback(boost::bind(
-                &RpcServerImpl::OnAccepted, shared_from_this(), _1));
+                &RpcServerImpl::OnAccepted, shared_from_this(), _1, _2));
     _listener->set_accept_fail_callback(boost::bind(
-                &RpcServerImpl::OnAcceptFailed, shared_from_this(), _1, _2));
+                &RpcServerImpl::OnAcceptFailed, shared_from_this(), _1, _2, _3));
     if (!_listener->start_listen())
     {
 #if defined( LOG )
@@ -382,13 +382,22 @@ void RpcServerImpl::OnCreated(const RpcServerStreamPtr& stream)
 {
     stream->set_flow_controller(_flow_controller);
     stream->set_received_request_callback(
-            boost::bind(&RpcServerImpl::OnReceived, shared_from_this(), _1, _2));
+            boost::bind(&RpcServerImpl::OnReceived, shared_from_this(), _1, _2,
+                      nullptr));
     stream->set_closed_stream_callback(
-            boost::bind(&RpcServerImpl::OnClosed, shared_from_this(), _1));
+            boost::bind(&RpcServerImpl::OnClosed, shared_from_this(), _1, nullptr));
 }
 
-void RpcServerImpl::OnAccepted(const RpcServerStreamPtr& stream)
+void RpcServerImpl::OnAccepted(const RpcServerStreamPtr& stream, const SpanPtr &span)
 {
+    stream->set_received_request_callback(
+            boost::bind(&RpcServerImpl::OnReceived, shared_from_this(), _1, _2, span));
+    stream->set_closed_stream_callback(
+            boost::bind(&RpcServerImpl::OnClosed, shared_from_this(), _1, span));
+    SpanPtr new_span = nullptr;
+    if (span) {
+        new_span = span->tracer().StartSpan("OnAccepted", {ChildOf(&span->context())});
+    }
     if (!_is_running)
     {
         stream->close("server not running");
@@ -407,10 +416,17 @@ void RpcServerImpl::OnAccepted(const RpcServerStreamPtr& stream)
 
     ScopedLocker<FastLock> _(_stream_set_lock);
     _stream_set.insert(stream);
+    if (new_span) {
+        new_span->Finish();
+    }
 }
 
-void RpcServerImpl::OnAcceptFailed(RpcErrorCode error_code, const std::string& error_text)
+void RpcServerImpl::OnAcceptFailed(RpcErrorCode error_code, const std::string& error_text, const SpanPtr &span)
 {
+    SpanPtr new_span = nullptr;
+    if (span) {
+        new_span = span->tracer().StartSpan("OnAccepted", {ChildOf(&span->context())});
+    }
     if (!_is_running)
         return;
 
@@ -419,10 +435,17 @@ void RpcServerImpl::OnAcceptFailed(RpcErrorCode error_code, const std::string& e
     {
         _event_handler->NotifyAcceptFailed(error_code, error_text);
     }
+    if (new_span) {
+        new_span->Finish();
+    }
 }
 
-void RpcServerImpl::OnReceived(const RpcServerStreamWPtr& stream, const RpcRequestPtr& request)
+void RpcServerImpl::OnReceived(const RpcServerStreamWPtr& stream, const RpcRequestPtr& request, const SpanPtr& span)
 {
+    SpanPtr new_span = nullptr;
+    if (span) {
+        new_span = span->tracer().StartSpan("OnReceived", {ChildOf(&span->context())});
+    }
     if (!_is_running)
     {
 #if defined( LOG )
@@ -435,11 +458,17 @@ void RpcServerImpl::OnReceived(const RpcServerStreamWPtr& stream, const RpcReque
         return;
     }
 
-    request->ProcessRequest(stream, _service_pool);
+    request->ProcessRequest(stream, _service_pool, span);
+    if (new_span) {
+        new_span->Finish();
+    }
 }
 
-void RpcServerImpl::OnClosed(const RpcServerStreamPtr& stream)
+void RpcServerImpl::OnClosed(const RpcServerStreamPtr& stream, const SpanPtr& span)
 {
+    if (span) {
+        span->Finish();
+    }
     if (!_is_running)
         return;
 

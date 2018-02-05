@@ -53,3 +53,4 @@ SNAPPY_DIR=/usr
 #ZLIB_DIR=
 ################################################################
 
+OPENTRACING_DIR=/usr/local

@@ -13,6 +13,23 @@
 namespace sofa {
 namespace pbrpc {
 
+class TraceWriter : public opentracing::TextMapWriter {
+public:
+    TraceWriter(RpcMeta &meta): _meta(meta) {
+
+    }
+
+    virtual opentracing::expected<void> Set(opentracing::string_view key, opentracing::string_view value) const {
+        opentracing::expected<void> result;
+        auto k = std::string(key);
+        auto v = std::string(value);
+        (*_meta.mutable_trace_info())[k] = v;
+        return result;
+    }
+private:
+    RpcMeta &_meta;
+};
+
 RpcClientImpl::RpcClientImpl(const RpcClientOptions& options)
     : _options(options)
     , _is_running(false)
@@ -253,11 +270,22 @@ void RpcClientImpl::CallMethod(const google::protobuf::Message* request,
     // generate sequence id
     cntl->SetSequenceId(GenerateSequenceId());
 
+    auto tracer = RpcTracer::Global();
+    std::shared_ptr<opentracing::Span> span = nullptr;
+    if (tracer) {
+        span = tracer->StartSpan("call_method");
+        span->SetTag("method", cntl->MethodId());
+        span->SetTag("sequence_id", cntl->SequenceId());
+    }
     // prepare request buffer
     RpcMeta meta;
     meta.set_type(RpcMeta::REQUEST);
     meta.set_sequence_id(cntl->SequenceId());
     meta.set_method(cntl->MethodId());
+    if (tracer) {
+        auto writer = TraceWriter(meta);
+        tracer->Inject(span->context(), writer);
+    }
     int64 timeout = cntl->Timeout();
     if (timeout > 0)
     {
@@ -280,6 +308,10 @@ void RpcClientImpl::CallMethod(const google::protobuf::Message* request,
                 RpcEndpointToString(cntl->RemoteEndpoint()).c_str());
 #endif
         cntl->Done(RPC_ERROR_SERIALIZE_REQUEST, "reserve rpc message header failed");
+        if (span) {
+            span->SetTag("error", "reserve rpc message header failed");
+            span->Finish();
+        }
         return;
     }
     if (!meta.SerializeToZeroCopyStream(&write_buffer))
@@ -292,6 +324,10 @@ void RpcClientImpl::CallMethod(const google::protobuf::Message* request,
                 RpcEndpointToString(cntl->RemoteEndpoint()).c_str());
 #endif
         cntl->Done(RPC_ERROR_SERIALIZE_REQUEST, "serialize rpc meta failed");
+        if (span) {
+            span->SetTag("error", "serialize rpc meta failed");
+            span->Finish();
+        }
         return;
     }
     header.meta_size = static_cast<int>(write_buffer.ByteCount() - header_pos - header_size);
@@ -317,6 +353,10 @@ void RpcClientImpl::CallMethod(const google::protobuf::Message* request,
                 RpcEndpointToString(cntl->RemoteEndpoint()).c_str());
 #endif
         cntl->Done(RPC_ERROR_SERIALIZE_REQUEST, "serialize request message failed");
+        if (span) {
+            span->SetTag("error", "serialize request message failed");
+            span->Finish();
+        }
         return;
     }
     header.data_size = write_buffer.ByteCount() - header_pos - header_size - header.meta_size;
@@ -328,7 +368,7 @@ void RpcClientImpl::CallMethod(const google::protobuf::Message* request,
     cntl->SetRequestBuffer(read_buffer);
 
     // push callback
-    cntl->PushDoneCallback(boost::bind(&RpcClientImpl::DoneCallback, shared_from_this(), response, _1));
+    cntl->PushDoneCallback(boost::bind(&RpcClientImpl::DoneCallback, shared_from_this(), response, _1, span));
 
     // add to timeout manager if need
     if (timeout > 0)
@@ -343,6 +383,10 @@ void RpcClientImpl::CallMethod(const google::protobuf::Message* request,
                     RpcEndpointToString(cntl->RemoteEndpoint()).c_str(), timeout);
 #endif
             cntl->Done(RPC_ERROR_REQUEST_TIMEOUT, "add to timeout manager failed, maybe too short timeout");
+            if (span) {
+                span->SetTag("error", "add to timeout manager failed, maybe too short timeout");
+                span->Finish();
+            }
             return;
         }
     }
@@ -359,7 +403,17 @@ const ThreadGroupImplPtr& RpcClientImpl::GetCallbackThreadGroup() const
 bool RpcClientImpl::ResolveAddress(const std::string& address,
         RpcEndpoint* endpoint)
 {
-    return sofa::pbrpc::ResolveAddress(_work_thread_group->io_service(), address, endpoint);
+    auto tracer = RpcTracer::Global();
+    std::shared_ptr<opentracing::Span> span = nullptr;
+    if (tracer) {
+        span = tracer ->StartSpan("ResolveAddress");
+        span->SetTag("address", address);
+    }
+    auto result = sofa::pbrpc::ResolveAddress(_work_thread_group->io_service(), address, endpoint);
+    if (span) {
+        span->Finish();
+    }
+    return result;
 }
 
 RpcClientStreamPtr RpcClientImpl::FindOrCreateStream(const RpcEndpoint& remote_endpoint)
@@ -426,8 +480,12 @@ void RpcClientImpl::ClearStreams()
 }
 
 void RpcClientImpl::DoneCallback(google::protobuf::Message* response,
-        const RpcControllerImplPtr& cntl)
+        const RpcControllerImplPtr& cntl,
+        const SpanPtr& span)
 {
+    if (span) {
+        span->Finish();
+    }
     // erase from RpcTimeoutManager
     _timeout_manager->erase(cntl->TimeoutId());
 

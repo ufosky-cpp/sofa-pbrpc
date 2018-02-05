@@ -15,6 +15,7 @@
 #include <sofa/pbrpc/io_service.h>
 #include <sofa/pbrpc/locks.h>
 #include <sofa/pbrpc/ptime.h>
+#include <sofa/pbrpc/rpc_tracer.hh>
 
 namespace sofa {
 namespace pbrpc {
@@ -68,6 +69,8 @@ typedef sofa::pbrpc::shared_ptr<IOServicePool> IOServicePoolPtr;
 
 class WebService;
 typedef sofa::pbrpc::shared_ptr<WebService> WebServicePtr;
+
+typedef std::shared_ptr<opentracing::Span> SpanPtr;
 
 #define SOFA_PBRPC_DECLARE_RESOURCE_COUNTER(name_) \
     extern sofa::pbrpc::AtomicCounter g_sofa_counter_##name_

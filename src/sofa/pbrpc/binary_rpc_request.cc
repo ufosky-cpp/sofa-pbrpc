@@ -10,6 +10,31 @@
 namespace sofa {
 namespace pbrpc {
 
+class TracerReader : public opentracing::TextMapReader {
+public:
+    TracerReader(RpcMeta &meta) : meta_(meta) {
+
+    }
+    virtual opentracing::expected<opentracing::string_view> LookupKey(opentracing::string_view key) const {
+        return opentracing::string_view(std::string(meta_.trace_info().at(std::string(key))));
+    }
+
+    virtual opentracing::expected<void> ForeachKey(
+            std::function<opentracing::expected<void>(opentracing::string_view key, opentracing::string_view value)> f)
+    const {
+        for (auto& key_value : meta_.trace_info()) {
+            auto was_successful = f(key_value.first, key_value.second);
+            if (!was_successful) {
+                // If the callback returns and unexpected value, bail out of the loop.
+                return was_successful;
+            }
+        }
+        return {};
+    }
+private:
+    RpcMeta &meta_;
+};
+
 BinaryRpcRequest::BinaryRpcRequest() : _req_body(new ReadBuffer())
 {
 }
@@ -35,7 +60,8 @@ uint64 BinaryRpcRequest::SequenceId()
 
 void BinaryRpcRequest::ProcessRequest(
         const RpcServerStreamWPtr& stream,
-        const ServicePoolPtr& service_pool)
+        const ServicePoolPtr& service_pool,
+        const SpanPtr& span)
 {
     std::string service_name;
     std::string method_name;
@@ -54,7 +80,19 @@ void BinaryRpcRequest::ProcessRequest(
                 RPC_ERROR_PARSE_METHOD_NAME, "method full name: " + _req_meta.method());
         return;
     }
-
+    auto tracer = RpcTracer::Global();
+    SpanPtr client_span = nullptr;
+    if (tracer) {
+        auto reader = TracerReader(_req_meta);
+        auto trace_context = tracer->Extract(reader);
+        if (trace_context) {
+            client_span = tracer->StartSpan("ProcessRequest",
+                                     {ChildOf(trace_context->get())});
+            client_span->SetTag("method", _req_meta.method().c_str());
+            client_span->SetTag("sequence_id", _req_meta.sequence_id());
+        }
+    }
+//    std::cout << _req_meta.trace_info().at("aaa") << std::endl;
     MethodBoard* method_board = FindMethodBoard(service_pool, service_name, method_name);
     if (method_board == NULL)
     {
@@ -69,6 +107,10 @@ void BinaryRpcRequest::ProcessRequest(
 #endif
         SendFailedResponse(stream,
                 RPC_ERROR_FOUND_METHOD, "method full name: " + _req_meta.method());
+        if (client_span) {
+            client_span->SetTag("error", "method not found");
+            client_span->Finish();
+        }
         return;
     }
 
@@ -101,6 +143,10 @@ void BinaryRpcRequest::ProcessRequest(
         SendFailedResponse(stream,
                 RPC_ERROR_PARSE_REQUEST_MESSAGE, "method full name: " + _req_meta.method());
         delete request;
+        if (client_span) {
+            client_span->SetTag("error", "parse request message failed");
+            client_span->Finish();
+        }
         return;
     }
 
@@ -121,7 +167,7 @@ void BinaryRpcRequest::ProcessRequest(
     cntl->SetResponseCompressType(_req_meta.has_expected_response_compress_type() ?
             _req_meta.expected_response_compress_type() : CompressTypeNone);
 
-    CallMethod(method_board, controller, request, response);
+    CallMethod(method_board, controller, request, response, client_span);
 }
 
 ReadBufferPtr BinaryRpcRequest::AssembleSucceedResponse(

@@ -19,9 +19,11 @@ using boost::asio::ip::tcp;
 class RpcListener : public sofa::pbrpc::enable_shared_from_this<RpcListener>
 {
     // Callback function when created or accepted a new connection.
-    typedef boost::function<void(const RpcServerStreamPtr& /* stream */)> Callback;
+    typedef boost::function<void(const RpcServerStreamPtr& /* stream */)> Callback1;
+    typedef boost::function<void(const RpcServerStreamPtr& /* stream */, const SpanPtr& /* span */)> Callback2;
     typedef boost::function<void(RpcErrorCode /* error_code */,
-            const std::string& /* error_text */)> FailCallback;
+            const std::string& /* error_text */,
+                                 const SpanPtr& /* span */)> FailCallback;
 
 public:
     static const int LISTEN_MAX_CONNECTIONS = 4096;
@@ -106,8 +108,8 @@ public:
             return false;
         }
 
-        int ret = fcntl(_acceptor.native(), F_SETFD, 
-                        fcntl(_acceptor.native(), F_GETFD) | FD_CLOEXEC);
+        int ret = fcntl(_acceptor.native_handle(), F_SETFD,
+                        fcntl(_acceptor.native_handle(), F_GETFD) | FD_CLOEXEC);
         if (ret < 0)
         {
 #if defined( LOG )
@@ -189,7 +191,11 @@ private:
     {
         if (_is_closed)
             return;
-
+        auto tracer = RpcTracer::Global();
+        SpanPtr span = nullptr;
+        if (tracer) {
+            span = tracer->StartSpan("on_accept");
+        }
         if (ec)
         {
 #if defined( LOG )
@@ -201,12 +207,16 @@ private:
 #endif
 
             close();
-
             if (_accept_fail_callback)
             {
                 RpcErrorCode error_code = ec == boost::asio::error::no_descriptors ?
                     RPC_ERROR_TOO_MANY_OPEN_FILES : RPC_ERROR_UNKNOWN;
-                _accept_fail_callback(error_code, ec.message());
+                _accept_fail_callback(error_code, ec.message(), span);
+            }
+            if (span) {
+                span->SetTag("has_error", true);
+                span->SetBaggageItem("error", ec.message());
+                span->Finish();
             }
         }
         else
@@ -215,7 +225,7 @@ private:
 
             if (!stream->is_closed() && _accept_callback)
             {
-                _accept_callback(stream);
+                _accept_callback(stream, span);
             }
 
             if (!stream->is_closed())
@@ -242,8 +252,8 @@ private:
     IOServicePoolPtr& _io_service_pool;
     RpcEndpoint _endpoint;
     std::string _endpoint_str;
-    Callback _create_callback;
-    Callback _accept_callback;
+    Callback1 _create_callback;
+    Callback2 _accept_callback;
     FailCallback _accept_fail_callback;
     tcp::acceptor _acceptor;
     volatile bool _is_closed;

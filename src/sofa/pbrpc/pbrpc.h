@@ -11,6 +11,7 @@
 #include <sofa/pbrpc/rpc_channel.h>
 #include <sofa/pbrpc/rpc_client.h>
 #include <sofa/pbrpc/rpc_server.h>
+#include <sofa/pbrpc/rpc_tracer.hh>
 
 #include <sofa/pbrpc/atomic.h>
 #include <sofa/pbrpc/counter.h>

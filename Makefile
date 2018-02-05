@@ -47,6 +47,7 @@ BIN_OBJ=$(patsubst %.cc,%.o,$(BIN_SRC))
 PUB_INC=src/sofa/pbrpc/pbrpc.h src/sofa/pbrpc/closure_helper.h src/sofa/pbrpc/closure.h \
 	src/sofa/pbrpc/ext_closure.h src/sofa/pbrpc/common.h src/sofa/pbrpc/rpc_channel.h \
 	src/sofa/pbrpc/rpc_server.h src/sofa/pbrpc/rpc_client.h \
+	src/sofa/pbrpc/rpc_tracer.hh \
 	src/sofa/pbrpc/rpc_controller.h src/sofa/pbrpc/rpc_error_code.h \
 	src/sofa/pbrpc/mock_test_helper.h src/sofa/pbrpc/atomic.h src/sofa/pbrpc/counter.h \
 	src/sofa/pbrpc/thread_group.h src/sofa/pbrpc/timeout_manager.h src/sofa/pbrpc/string_utils.h \
@@ -79,10 +80,10 @@ endif
 
 #-----------------------------------------------
 
-INCPATH=-Isrc -I$(BOOST_HEADER_DIR) -I$(PROTOBUF_DIR)/include -I$(SNAPPY_DIR)/include -I$(ZLIB_DIR)/include
+INCPATH=-Isrc -I$(BOOST_HEADER_DIR) -I$(PROTOBUF_DIR)/include -I$(SNAPPY_DIR)/include -I$(ZLIB_DIR)/include -I$(OPENTRACING_DIR)/include
 CXXFLAGS += $(OPT) -pipe -W -Wall -fPIC -D_GNU_SOURCE -D__STDC_LIMIT_MACROS -DHAVE_SNAPPY $(INCPATH)
 
-LDFLAGS += -L$(ZLIB_DIR)/lib -L$(PROTOBUF_DIR)/lib/ -L$(SNAPPY_DIR)/lib/ -lprotobuf -lsnappy -lpthread -lz
+LDFLAGS += -L$(ZLIB_DIR)/lib -L$(PROTOBUF_DIR)/lib/ -L$(SNAPPY_DIR)/lib/ -L$(OPENTRACING_DIR)/lib/ -lprotobuf -lsnappy -lpthread -lz -lopentracing
 
 .PHONY: check_depends build rebuild install clean
 
@@ -94,6 +95,8 @@ check_depends:
 	@if [ ! -f "$(PROTOBUF_DIR)/lib/libprotobuf.a" ]; then echo "ERROR: need protobuf lib"; exit 1; fi
 	@if [ ! -f "$(SNAPPY_DIR)/include/snappy.h" ]; then echo "ERROR: need snappy header"; exit 1; fi
 	@if [ ! -f "$(SNAPPY_DIR)/lib/libsnappy.a" ]; then echo "ERROR: need snappy lib"; exit 1; fi
+	@if [ ! -f "$(OPENTRACING_DIR)/include/opentracing/tracer.h" ]; then echo "ERROR: need opentracing header"; exit 1; fi
+	@if [ ! -f "$(OPENTRACING_DIR)/lib/libopentracing.a" ]; then echo "ERROR: need opentracing lib"; exit 1; fi
 
 clean:
 	rm -f $(LIB) $(BIN) $(LIB_OBJ) $(PROTO_OBJ) $(BIN_OBJ) $(PROTO_HEADER) $(PROTO_SRC)

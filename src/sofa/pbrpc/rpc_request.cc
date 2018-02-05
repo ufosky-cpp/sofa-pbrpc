@@ -13,8 +13,13 @@ void RpcRequest::CallMethod(
         MethodBoard* method_board,
         RpcController* controller,
         google::protobuf::Message* request,
-        google::protobuf::Message* response)
+        google::protobuf::Message* response,
+        const SpanPtr& span)
 {
+    SpanPtr new_span = nullptr;
+    if (span) {
+        new_span = span->tracer().StartSpan("CallMethod", {ChildOf(&span->context())});
+    }
     PTime time_now = ptime_now();
     const RpcControllerImplPtr& cntl = controller->impl();
 
@@ -29,6 +34,11 @@ void RpcRequest::CallMethod(
         SLOG(WARNING, "CallMethod(): %s {%lu}: stream already closed, not process request",
                 RpcEndpointToString(_remote_endpoint).c_str(), cntl->SequenceId());
 #endif
+        if (new_span) {
+            new_span->SetTag("has_error", true);
+            new_span->SetBaggageItem("error", "stream already closed, not process request");
+            new_span->Finish();
+        }
         delete request;
         delete response;
         delete controller;
@@ -53,6 +63,11 @@ void RpcRequest::CallMethod(
                 RpcEndpointToString(_remote_endpoint).c_str(), cntl->SequenceId(),
                 (cntl->ServerTimeout() * 1000), server_wait_time_us);
 #endif
+            if (new_span) {
+                new_span->SetTag("has_error", true);
+                new_span->SetBaggageItem("error", "wait processing timeout, not process request");
+                new_span->Finish();
+            }
             delete request;
             delete response;
             delete controller;
@@ -62,7 +77,7 @@ void RpcRequest::CallMethod(
 
     google::protobuf::Closure* done = NewClosure(
             shared_from_this(), &RpcRequest::OnCallMethodDone,
-            method_board, controller, request, response);
+            method_board, controller, request, response, new_span);
     cntl->SetStartProcessTime(time_now);
     stream->increase_pending_process_count();
     method_board->ReportProcessBegin();
@@ -74,8 +89,12 @@ void RpcRequest::OnCallMethodDone(
         MethodBoard* method_board,
         RpcController* controller,
         google::protobuf::Message* request,
-        google::protobuf::Message* response)
+        google::protobuf::Message* response,
+        const SpanPtr& span)
 {
+    if (span) {
+        span->Finish();
+    }
     PTime time_now = ptime_now();
     const RpcControllerImplPtr& cntl = controller->impl();
     cntl->SetFinishProcessTime(time_now);

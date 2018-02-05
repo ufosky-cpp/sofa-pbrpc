@@ -65,7 +65,8 @@ private:
     void ClearStreams();
 
     void DoneCallback(google::protobuf::Message* response,
-            const RpcControllerImplPtr& cntl);
+            const RpcControllerImplPtr& cntl,
+                      std::shared_ptr<opentracing::Span> span);
 
     bool ShouldStreamRemoved(const RpcClientStreamPtr& stream);
 

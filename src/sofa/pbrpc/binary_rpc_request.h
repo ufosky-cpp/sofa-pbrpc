@@ -31,7 +31,8 @@ public:
 
     virtual void ProcessRequest(
             const RpcServerStreamWPtr& server_stream,
-            const ServicePoolPtr& service_pool);
+            const ServicePoolPtr& service_pool,
+            const SpanPtr& span);
 
     virtual ReadBufferPtr AssembleSucceedResponse(
             const RpcControllerImplPtr& cntl,
